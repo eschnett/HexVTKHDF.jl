@@ -1,6 +1,6 @@
 # HexVTKHDF
 
-tagline
+VTKHDF5 I/O and visualization for hexahedral meshes
 
 [![CI](https://github.com/eschnett/HexVTKHDF.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/eschnett/HexVTKHDF.jl/actions/workflows/CI.yml)
 [![Documentation](https://github.com/eschnett/HexVTKHDF.jl/actions/workflows/docs.yml/badge.svg)](https://eschnett.github.io/HexVTKHDF.jl/)
