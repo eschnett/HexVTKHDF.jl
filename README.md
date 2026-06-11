@@ -23,7 +23,7 @@ SBP-SAT discretizations.
   supporting arithmetic, reductions, and mesh-aware operations
   (`integrate`, `l2_norm_phys`, `probe`).
 * **Visualization** — `uniform_slice` interpolates a field onto a
-  uniform 2-D grid (Makie-free); loading a Makie backend activates the
+  uniform 2D grid; loading a Makie backend activates the
   `HexVTKHDFMakieExt` extension with `heatmap`, the `fieldsliceplot`
   recipe, and the figure-level `plotslice`.
 
@@ -136,7 +136,7 @@ s["phi", 2]                        # Array{T,4} (N, N, N, Ne)
 
 A `.vtu` series carries the visualization geometry and an `(N, Ne)`
 layout tag, but not the mesh/patch state — fields read back as plain
-arrays, not `MeshField`s. The VTKHDF file stays the primary format.
+arrays, not `MeshField`s. The VTKHDF file is the primary format.
 
 ## File schema
 
@@ -191,7 +191,5 @@ for readers and ParaView, and as a writer-API example.
 
 ## Installation
 
-The package depends on the unregistered packages HexMeshes and
-HexSBPSAT — `Pkg.develop`/`Pkg.add` them by path/URL first. Makie is a
-weak dependency: the plotting API materialises only when a Makie
-backend is loaded.
+Makie is a weak dependency: the plotting API materialises only when a
+Makie backend is loaded.

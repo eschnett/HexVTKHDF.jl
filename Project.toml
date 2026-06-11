@@ -1,6 +1,6 @@
 name = "HexVTKHDF"
 uuid = "ac570316-e44a-4680-8f99-93c220bf4d9d"
-version = "1.1.0"
+version = "1.0.0"
 authors = ["Erik Schnetter <schnetter@gmail.com>"]
 
 [deps]
