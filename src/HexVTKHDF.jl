@@ -22,6 +22,10 @@ spectral-element data on HexMeshes hexahedral meshes.
     onto a uniform 2-D grid; with Makie loaded (e.g. `using CairoMakie`)
     the `HexVTKHDFMakieExt` extension provides `heatmap(::FieldSlice)`,
     the `fieldsliceplot` recipe, and [`plotslice`](@ref).
+  * **VTU export**: for tools without a VTKHDF reader (VisIt),
+    [`VTUWriter`](@ref) writes XML VTK (`.vtu`) series with
+    `.pvd`/`.visit` indexes, [`vtkhdf_to_vtu`](@ref) converts existing
+    files, and [`VTUSeries`](@ref) reads the series back.
 
 The on-disk schema is documented in the package README.
 """
@@ -41,12 +45,15 @@ using LinearAlgebra
 using StaticArrays
 using TOML
 import Pkg
+import ReadVTK
+import WriteVTK
 
 include("writer.jl")
 include("meshio.jl")
 include("reader.jl")
 include("field.jl")
 include("slices.jl")
+include("vtu.jl")
 
 # Implemented by the Makie extension (load Makie/CairoMakie to use).
 """
@@ -80,6 +87,7 @@ function fieldsliceplot! end
 export VTKHDFWriter, write_step!, vtkhdf_finalize!
 export VTKHDFFile, nsteps, times, field_names, metadata, versions,
        coordinates, read_mesh, discretization, readfield
+export VTUWriter, VTUSeries, vtkhdf_to_vtu
 export node_coordinates
 export Discretization, operators, geometry
 export MeshField, integrate, l2_norm_phys, probe

@@ -20,6 +20,81 @@
 
 const _VTK_HEXAHEDRON = UInt8(12)
 
+# --- helpers shared with the .vtu writer (vtu.jl) ---------------------------
+
+# Flatten (3, N, N, N, Ne) GLL node coordinates into the (3, npoints)
+# VTK points layout (i fastest, then j, k, e).
+function _vtk_points(coords::AbstractArray{T,5}) where {T}
+    _, N1, N2, N3, Ne = size(coords)
+    @assert size(coords, 1) == 3 && N1 == N2 == N3
+    N = N1
+    pts = Matrix{T}(undef, 3, N^3 * Ne)
+    p = 0
+    @inbounds for e in 1:Ne, k in 1:N, j in 1:N, i in 1:N
+        p += 1
+        pts[1, p] = coords[1, i, j, k, e]
+        pts[2, p] = coords[2, i, j, k, e]
+        pts[3, p] = coords[3, i, j, k, e]
+    end
+    return pts
+end
+
+# 0-based connectivity of the (N−1)³ linear hexahedral sub-cells per
+# element, in VTK corner order.
+function _subcell_connectivity(N::Int, Ne::Int)
+    ncells = (N - 1)^3 * Ne
+    nid(i, j, k, e) = (i - 1) + N*(j - 1) + N^2*(k - 1) + N^3*(e - 1)
+    conn = Vector{Int64}(undef, 8 * ncells)
+    q = 0
+    @inbounds for e in 1:Ne, k in 1:N-1, j in 1:N-1, i in 1:N-1
+        conn[q+1] = nid(i,   j,   k,   e)
+        conn[q+2] = nid(i+1, j,   k,   e)
+        conn[q+3] = nid(i+1, j+1, k,   e)
+        conn[q+4] = nid(i,   j+1, k,   e)
+        conn[q+5] = nid(i,   j,   k+1, e)
+        conn[q+6] = nid(i+1, j,   k+1, e)
+        conn[q+7] = nid(i+1, j+1, k+1, e)
+        conn[q+8] = nid(i,   j+1, k+1, e)
+        q += 8
+    end
+    return conn
+end
+
+# Expand a `name => array` iterable into scalar fields: 4-D arrays and
+# flat npoints vectors pass through, (N,N,N,Ne,C) arrays become
+# `name_1 … name_C`.
+function _flatten_fields(fields)
+    flat = Vector{Pair{String,Any}}()
+    for (name, a) in fields
+        if ndims(a) == 4 || ndims(a) == 1
+            push!(flat, String(name) => a)
+        elseif ndims(a) == 5
+            for c in 1:size(a, 5)
+                push!(flat, "$(name)_$c" => view(a, :, :, :, :, c))
+            end
+        else
+            error("write_step!: field $name must be 1-, 4- or 5-dimensional")
+        end
+    end
+    return flat
+end
+
+# The reproducibility payload stored as a TOML string: the caller's
+# `metadata` under "parameters", plus the package versions of the
+# active environment and the Julia version.
+function _metadata_toml(metadata)
+    meta = Dict{String,Any}()
+    meta["parameters"] = metadata === nothing ? Dict{String,Any}() :
+                         _toml_ready(metadata)
+    deps = Dict{String,Any}()
+    for (_, d) in Pkg.dependencies()
+        d.version === nothing || (deps[d.name] = string(d.version))
+    end
+    meta["package_versions"] = deps
+    meta["julia_version"] = string(VERSION)
+    return sprint(io -> TOML.print(io, meta))
+end
+
 mutable struct VTKHDFWriter{T}
     file::HDF5.File
     path::String
@@ -77,32 +152,11 @@ function VTKHDFWriter(path::AbstractString, coords::AbstractArray{T,5};
     end
 
     # --- static geometry -------------------------------------------------
-    pts = Matrix{T}(undef, 3, npoints)
-    p = 0
-    @inbounds for e in 1:Ne, k in 1:N, j in 1:N, i in 1:N
-        p += 1
-        pts[1, p] = coords[1, i, j, k, e]
-        pts[2, p] = coords[2, i, j, k, e]
-        pts[3, p] = coords[3, i, j, k, e]
-    end
     # Julia (3, npoints) column-major ⇒ HDF5 sees (npoints, 3) row-major,
     # which is the VTKHDF Points layout.
-    root["Points"] = pts
+    root["Points"] = _vtk_points(coords)
 
-    nid(i, j, k, e) = (i - 1) + N*(j - 1) + N^2*(k - 1) + N^3*(e - 1)  # 0-based
-    conn = Vector{Int64}(undef, 8 * ncells)
-    q = 0
-    @inbounds for e in 1:Ne, k in 1:N-1, j in 1:N-1, i in 1:N-1
-        conn[q+1] = nid(i,   j,   k,   e)
-        conn[q+2] = nid(i+1, j,   k,   e)
-        conn[q+3] = nid(i+1, j+1, k,   e)
-        conn[q+4] = nid(i,   j+1, k,   e)
-        conn[q+5] = nid(i,   j,   k+1, e)
-        conn[q+6] = nid(i+1, j,   k+1, e)
-        conn[q+7] = nid(i+1, j+1, k+1, e)
-        conn[q+8] = nid(i,   j+1, k+1, e)
-        q += 8
-    end
+    conn = _subcell_connectivity(N, Ne)
     root["Connectivity"] = conn
     root["Offsets"] = collect(Int64, 0:8:8ncells)
     root["Types"] = fill(_VTK_HEXAHEDRON, ncells)
@@ -127,16 +181,7 @@ function VTKHDFWriter(path::AbstractString, coords::AbstractArray{T,5};
     create_group(steps, "PointDataOffsets")
 
     # --- reproducibility metadata ----------------------------------------
-    meta = Dict{String,Any}()
-    meta["parameters"] = metadata === nothing ? Dict{String,Any}() :
-                         _toml_ready(metadata)
-    deps = Dict{String,Any}()
-    for (_, d) in Pkg.dependencies()
-        d.version === nothing || (deps[d.name] = string(d.version))
-    end
-    meta["package_versions"] = deps
-    meta["julia_version"] = string(VERSION)
-    file["Metadata"] = sprint(io -> TOML.print(io, meta))
+    file["Metadata"] = _metadata_toml(metadata)
 
     # Self-describing discretization (mesh + SBP element order): with
     # this group the file alone reconstructs mesh/element/operators/
@@ -196,18 +241,7 @@ function write_step!(w::VTKHDFWriter{T}, t::Real; fields) where {T}
     pdo = steps["PointDataOffsets"]
 
     # Flatten multi-channel arrays into scalar fields.
-    flat = Vector{Pair{String,Any}}()
-    for (name, a) in fields
-        if ndims(a) == 4
-            push!(flat, String(name) => a)
-        elseif ndims(a) == 5
-            for c in 1:size(a, 5)
-                push!(flat, "$(name)_$c" => view(a, :, :, :, :, c))
-            end
-        else
-            error("write_step!: field $name must be 4- or 5-dimensional")
-        end
-    end
+    flat = _flatten_fields(fields)
     names = first.(flat)
     if w.nsteps == 0
         w.fieldnames = names

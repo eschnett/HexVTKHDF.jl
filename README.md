@@ -110,6 +110,34 @@ the values, the element-edge segments, and a label. In the recipe form
 `fieldsliceplot(field; sliceaxis = :z, offset = 0, res = 200)` the slice
 axis keyword is `sliceaxis` (Makie reserves `axis` for Axis options).
 
+## VisIt: VTU export
+
+VisIt has no VTKHDF reader (its generic HDF5 reader shows only the raw
+group structure). For VisIt — or any tool that reads XML VTK — export a
+`.vtu` series:
+
+```julia
+vtkhdf_to_vtu("run.vtkhdf")        # → run.pvd, run.visit, run_NNNNNN.vtu
+vtkhdf_to_vtu("run.vtkhdf", "viz/run"; fields = ["phi"], steps = 1:10)
+```
+
+Open `run.visit` in VisIt (or `run.pvd` in ParaView). The converter
+copies points and connectivity verbatim and writes `/Metadata` to a
+`run_metadata.toml` sidecar. `VTUWriter` writes such series directly
+(same `write_step!` API as `VTKHDFWriter`, one file per step, indexes
+rewritten every step so live runs can be opened), and `VTUSeries` reads
+them back:
+
+```julia
+s = VTUSeries("run.pvd")           # or .visit, a prefix, or one .vtu
+nsteps(s), times(s), field_names(s)
+s["phi", 2]                        # Array{T,4} (N, N, N, Ne)
+```
+
+A `.vtu` series carries the visualization geometry and an `(N, Ne)`
+layout tag, but not the mesh/patch state — fields read back as plain
+arrays, not `MeshField`s. The VTKHDF file stays the primary format.
+
 ## File schema
 
 The `/VTKHDF` group follows the

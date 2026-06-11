@@ -7,6 +7,7 @@ using HexVTKHDF
     include("test_reader.jl")
     include("test_field.jl")
     include("test_slices.jl")
+    include("test_vtu.jl")
     # Makie does not support 32-bit platforms (its texture atlas is
     # serialised with 64-bit dimensions, so CairoMakie fails to even
     # precompile there). CI runs the 32-bit job with

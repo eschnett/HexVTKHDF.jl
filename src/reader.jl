@@ -137,17 +137,23 @@ Read one stored field at one time step (1-based) as a
 [`MeshField`](@ref) carrying the reconstructed discretization, the
 field name, and the sample time.
 """
-function readfield(f::VTKHDFFile{T}, name::AbstractString,
-                   step::Int) where {T}
+# One stored field at one step as the flat npoints vector (no
+# /Discretization required).
+function _raw_field(f::VTKHDFFile, name::AbstractString, step::Int)
     1 <= step <= nsteps(f) ||
         throw(BoundsError("step $step of $(nsteps(f))"))
     pd = f.file["VTKHDF"]["PointData"]
     haskey(pd, name) ||
         error("HexVTKHDF: no field \"$name\" (have: " *
               "$(join(field_names(f), ", ")))")
-    d = discretization(f)
     off = (step - 1) * f.npoints
-    flat = pd[name][off+1:off+f.npoints]
+    return pd[name][off+1:off+f.npoints]
+end
+
+function readfield(f::VTKHDFFile{T}, name::AbstractString,
+                   step::Int) where {T}
+    d = discretization(f)
+    flat = _raw_field(f, name, step)
     data = reshape(flat, f.N, f.N, f.N, f.Ne)
     t = T(times(f)[step])
     return MeshField(data, d; name = String(name), time = t)
